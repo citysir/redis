@@ -398,25 +398,26 @@ var _ = Describe("ClusterClient", func() {
 					cmds, err = pipe.Exec()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cmds).To(HaveLen(14))
-					Expect(cmds[0].(*redis.StringCmd).Val()).To(Equal("A_value"))
-					Expect(cmds[1].(*redis.DurationCmd).Val()).To(BeNumerically("~", 1*time.Hour, time.Second))
-					Expect(cmds[6].(*redis.StringCmd).Val()).To(Equal("D_value"))
-					Expect(cmds[7].(*redis.DurationCmd).Val()).To(BeNumerically("~", 4*time.Hour, time.Second))
-					Expect(cmds[12].(*redis.StringCmd).Val()).To(Equal("G_value"))
-					Expect(cmds[13].(*redis.DurationCmd).Val()).To(BeNumerically("~", 7*time.Hour, time.Second))
+
+					for i, key := range keys {
+						get := cmds[i*2].(*redis.StringCmd)
+						Expect(get.Val()).To(Equal(key + "_value"))
+
+						ttl := cmds[(i*2)+1].(*redis.DurationCmd)
+						Expect(ttl.Val()).To(BeNumerically("~", time.Duration(i+1)*time.Hour, time.Second))
+					}
 				})
 
 				It("works with missing keys", func() {
-					Expect(client.Set("A", "A_value", 0).Err()).NotTo(HaveOccurred())
-					Expect(client.Set("C", "C_value", 0).Err()).NotTo(HaveOccurred())
+					pipe.Set("A", "A_value", 0)
+					pipe.Set("C", "C_value", 0)
+					_, err := pipe.Exec()
+					Expect(err).NotTo(HaveOccurred())
 
-					var a, b, c *redis.StringCmd
-					cmds, err := client.Pipelined(func(pipe *redis.Pipeline) error {
-						a = pipe.Get("A")
-						b = pipe.Get("B")
-						c = pipe.Get("C")
-						return nil
-					})
+					a := pipe.Get("A")
+					b := pipe.Get("B")
+					c := pipe.Get("C")
+					cmds, err := pipe.Exec()
 					Expect(err).To(Equal(redis.Nil))
 					Expect(cmds).To(HaveLen(3))
 
